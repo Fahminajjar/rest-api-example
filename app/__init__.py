@@ -1,0 +1,26 @@
+from flask import Flask, Blueprint
+from flask_restful import Api
+from app.api import CourseAPI
+
+# API object
+api_bp = Blueprint('api', __name__)
+api = Api(api_bp)
+
+
+# Routing
+api.add_resource(CourseAPI, '/courses/<int:course_id>', '/courses')
+
+
+# Creating Flask app
+def create_app(configs):
+    app = Flask(__name__)
+    app.config.from_object(configs)
+    app.register_blueprint(api_bp, url_prefix='/api')
+    from app.models import db
+    db.init_app(app)
+    return app
+
+
+if __name__ == '__main__':
+    app = create_app('app.configs')
+    app.run(debug=True)
