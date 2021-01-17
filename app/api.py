@@ -1,5 +1,6 @@
 from flask import request
 from flask_restful import Resource
+from app import errors
 from app.models import db, Course, CourseSchema
 from marshmallow.exceptions import ValidationError
 
@@ -29,17 +30,18 @@ class CourseAPI(Resource):
     def post(self):
         req_data = request.get_json()
         if not req_data:
-            return {'message': 'No data provided'}, 400
+            raise errors.NoDataProvided
 
         try:
             data = course_schema.load(req_data)
         except ValidationError as e:
-            errors = e.args[0]
-            return errors, 400
+            errors_dict = e.args[0]
+            return errors_dict, 400
 
         course = Course.query.filter_by(name=data['name']).first()
         if course:
-            return {'message': 'Course already exist'}, 400
+            raise errors.CourseAlreadyExist
+
         course = Course(name=data['name'])
 
         db.session.add(course)
@@ -52,13 +54,13 @@ class CourseAPI(Resource):
 
         req_data = request.get_json()
         if not req_data:
-            return {'message': 'No data provided'}, 400
+            raise errors.NoDataProvided
 
         try:
             data = course_schema.load(req_data)
         except ValidationError as e:
-            errors = e.args[0]
-            return errors, 400
+            errors_dict = e.args[0]
+            return errors_dict, 400
 
         course.name = data['name']
         db.session.commit()

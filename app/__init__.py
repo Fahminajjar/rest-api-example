@@ -1,10 +1,12 @@
 from flask import Flask, Blueprint
 from flask_restful import Api
 from app.api import CourseAPI
+from app.errors import errors
+
 
 # API object
 api_bp = Blueprint('api', __name__)
-api = Api(api_bp)
+api = Api(api_bp, errors=errors)
 
 
 # Routing
