@@ -15,10 +15,11 @@ This is an example for my Medium article to show how to build a RESTful API usin
 ```
 course_service
 |-- app
-    |-- __init__.py     # App entry point
-    |-- api.py          # API endpoints
-    |-- models.py       # App models
-    |-- configs.py      # App configurations
+|   |-- __init__.py     # App entry point
+|   |-- api.py          # API endpoints
+|   |-- errors.py       # API errors
+|   |-- models.py       # App models
+|   |-- configs.py      # App configurations
 |-- manage.py           # Command line interface
 |-- requirements.txt    # App dependencies and requirements
 ```
@@ -71,7 +72,33 @@ SQLALCHEMY_DATABASE_URI = 'sqlite:///app.db'
 SQLALCHEMY_TRACK_MODIFICATIONS = True
 ```
 
-### Step 4: Create the application entry point
+### Step 4: Create errors module
+
+The `app/errors.py` module contains all errors that might occur in the API methods. There are two errors that might occur in the API methods, `NoDataProvided` which will be raised if a client didn’t send data with the request and `CourseAlreadyExist` if there is an existing course in the database with the same provided course name (course name is a unique field).
+
+```python3
+class NoDataProvided(Exception):
+    pass
+
+
+class CourseAlreadyExist(Exception):
+    pass
+
+
+errors = {
+    'NoDataProvided': {
+        'message': "No data provided.",
+        'status': 400,
+    },
+    'CourseAlreadyExist': {
+        'message': "Course already exist.",
+        'status': 400,
+    }
+}
+```
+
+
+### Step 5: Create the application entry point
 
 The `app/__init__.py` module will be the entry point of our application, it initializes a new Flask application with the given configurations and it defines resource routing.
 
@@ -79,13 +106,17 @@ The `app/__init__.py` module will be the entry point of our application, it init
 from flask import Flask, Blueprint
 from flask_restful import Api
 from app.api import CourseAPI
+from app.errors import errors
+
 
 # API object
 api_bp = Blueprint('api', __name__)
-api = Api(api_bp)
+api = Api(api_bp, errors=errors)
+
 
 # Routing
 api.add_resource(CourseAPI, '/courses/<int:course_id>', '/courses')
+
 
 # Creating Flask app
 def create_app(configs):
@@ -98,11 +129,14 @@ def create_app(configs):
 
 
 if __name__ == '__main__':
-    app = create_app('config')
+    app = create_app('app.configs')
     app.run(debug=True)
 ```
 
-### Step 5: Create the models
+As you can see I’m connecting the API errors dictionary with the API object, it will tell the API class to handle the errors that are defined in the `app/errors.py` module. You just have to raise exceptions in the API methods and it will take care of returning the response for clients.
+
+
+### Step 6: Create the models
 
 In the `app/models.py` module, create a simple `Course` model (resource) that has an id as the primary key and a name field. `CourseSchema` uses marshmallow to define the output format (serialization/deserialization) of a course object.
 
@@ -123,15 +157,21 @@ class CourseSchema(ma.Schema):
     name = fields.String(required=True)
 ```
 
-### Step 6: Create API endpoints
+### Step 7: Create API endpoints
 
-Flask-Rest provides a `Resource` class that defines routing from any given URL to the intended HTTP method. Define `CourseAPI` in the `app/api.py` module:
+Flask-Rest provides a `Resource` class that defines routing from any given URL to the intended HTTP method. Define `CourseAPI` in the `app/api.py` module.
+
+`CourseAPI` class will have 4 methods, a `get` method to handle course/s retrieve (either a list of courses or a specific course), a `create` method to handle course creation, a `put` method to handle updates for a specific course, and `delete` to delete a specific course.
+
+As you can see, we’re using pagination in the `get` method to prevent returning a huge list of courses.
 
 ```python3
 from flask import request
 from flask_restful import Resource
+from app import errors
 from app.models import db, Course, CourseSchema
 from marshmallow.exceptions import ValidationError
+
 
 course_schema = CourseSchema()
 courses_schema = CourseSchema(many=True)
@@ -148,7 +188,6 @@ class CourseAPI(Resource):
 
             pagination = Course.query.paginate(
                 page=page, per_page=per_page)
-                
             return {
                 'page': pagination.page,
                 'per_page': pagination.per_page,
@@ -159,17 +198,18 @@ class CourseAPI(Resource):
     def post(self):
         req_data = request.get_json()
         if not req_data:
-            return {'message': 'No data provided'}, 400
+            raise errors.NoDataProvided
 
         try:
             data = course_schema.load(req_data)
         except ValidationError as e:
-            errors = e.args[0]
-            return errors, 400
+            errors_dict = e.args[0]
+            return errors_dict, 400
 
         course = Course.query.filter_by(name=data['name']).first()
         if course:
-            return {'message': 'Course already exist'}, 400
+            raise errors.CourseAlreadyExist
+
         course = Course(name=data['name'])
 
         db.session.add(course)
@@ -182,13 +222,13 @@ class CourseAPI(Resource):
 
         req_data = request.get_json()
         if not req_data:
-            return {'message': 'No data provided'}, 400
+            raise errors.NoDataProvided
 
         try:
             data = course_schema.load(req_data)
         except ValidationError as e:
-            errors = e.args[0]
-            return errors, 400
+            errors_dict = e.args[0]
+            return errors_dict, 400
 
         course.name = data['name']
         db.session.commit()
@@ -201,7 +241,7 @@ class CourseAPI(Resource):
         return {}, 204
 ```
 
-### Step 7: Create the manage script
+### Step 8: Create the manage script
 
 The `manage.py` module provides you with a command-line interface to manipulate the database (initializing the database, making model migrations, and running migrations), run an interactive shell, and run the application server.
 
@@ -221,7 +261,7 @@ if __name__ == '__main__':
     manager.run()
 ```
 
-### Step 8: Run the application server
+### Step 9: Run the application server
 
 First, initialize the database for the application:
 
