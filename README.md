@@ -20,7 +20,6 @@ course_service
 |   |-- errors.py       # API errors
 |   |-- models.py       # App models
 |   |-- configs.py      # App configurations
-|-- manage.py           # Command line interface
 |-- requirements.txt    # App dependencies and requirements
 ```
 
@@ -105,6 +104,7 @@ The `app/__init__.py` module will be the entry point of our application, it init
 ```python3
 from flask import Flask, Blueprint
 from flask_restful import Api
+from flask_migrate import Migrate
 from app.api import CourseAPI
 from app.errors import errors
 
@@ -119,12 +119,15 @@ api.add_resource(CourseAPI, '/courses/<int:course_id>', '/courses')
 
 
 # Creating Flask app
-def create_app(configs):
+def create_app(configs='app.configs'):
     app = Flask(__name__)
     app.config.from_object(configs)
     app.register_blueprint(api_bp, url_prefix='/api')
+    
     from app.models import db
     db.init_app(app)
+    Migrate(app=app, db=db)
+    
     return app
 
 
@@ -174,7 +177,6 @@ from marshmallow.exceptions import ValidationError
 
 
 course_schema = CourseSchema()
-courses_schema = CourseSchema(many=True)
 
 
 class CourseAPI(Resource):
@@ -192,7 +194,7 @@ class CourseAPI(Resource):
                 'page': pagination.page,
                 'per_page': pagination.per_page,
                 'total': pagination.total,
-                'items': courses_schema.dump(pagination.items)
+                'items': courses_schema.dump(pagination.items, many=True)
             }, 200
 
     def post(self):
@@ -241,50 +243,30 @@ class CourseAPI(Resource):
         return {}, 204
 ```
 
-### Step 8: Create the manage script
-
-The `manage.py` module provides you with a command-line interface to manipulate the database (initializing the database, making model migrations, and running migrations), run an interactive shell, and run the application server.
-
-```python3
-from flask_script import Manager
-from flask_migrate import Migrate, MigrateCommand
-from app.models import db
-from app import create_app
-
-app = create_app('config')
-
-migrate = Migrate(app, db)
-manager = Manager(app)
-manager.add_command('db', MigrateCommand)
-
-if __name__ == '__main__':
-    manager.run()
-```
-
-### Step 9: Run the application server
+### Step 8: Run the application server
 
 First, initialize the database for the application:
 
 ```bash
-$ python manage.py db init
+$ flask db init
 ```
 
 Next, generate migration scripts (Python scripts) for the new models with detected changes, as in our case, a migration script to create the courses table:
 
 ```bash
-$ python manage.py db migrate
+$ flask db migrate
 ```
 
 Run the generated migrations to apply them to the database:
 
 ```bash
-$ python manage.py db upgrade
+$ flask db upgrade
 ```
 
 Finally, you are good to go:
 
 ```bash
-$ python manage.py runserver
+$ flask run
 ```
 
 Try to manipulate a course resource using the CRUD-operations. You can use the basic CURL command or any other tool like Postman:
