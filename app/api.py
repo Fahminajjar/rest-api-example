@@ -6,7 +6,6 @@ from marshmallow.exceptions import ValidationError
 
 
 course_schema = CourseSchema()
-courses_schema = CourseSchema(many=True)
 
 
 class CourseAPI(Resource):
@@ -24,7 +23,7 @@ class CourseAPI(Resource):
                 'page': pagination.page,
                 'per_page': pagination.per_page,
                 'total': pagination.total,
-                'items': courses_schema.dump(pagination.items)
+                'items': course_schema.dump(pagination.items, many=True)
             }, 200
 
     def post(self):
